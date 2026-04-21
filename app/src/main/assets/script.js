@@ -37,6 +37,34 @@ const SVG_ICONS = {"A": "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAyIiBoZWlna
         catch (e) { return false; }
     };
 
+    // Esconde os controles nativos do Boosteroid para evitar duplicação
+    const hideNativeBoosteroidControls = () => {
+        if (!PLATFORM.isBoosteroid) return;
+        const style = document.createElement('style');
+        style.id = 'hide-native-controls';
+        style.textContent = `
+            [class*="gamepad"], [class*="Gamepad"],
+            [class*="controller"], [class*="Controller"],
+            [class*="joystick"], [class*="Joystick"],
+            [class*="touch-control"], [class*="TouchControl"],
+            [class*="virtual-pad"], [class*="VirtualPad"],
+            [class*="on-screen"], [class*="OnScreen"],
+            [class*="dpad"], [class*="Dpad"],
+            [class*="btn-"], [class*="game-btn"],
+            [data-testid*="control"], [data-testid*="gamepad"]
+            { display: none !important; opacity: 0 !important; pointer-events: none !important; }
+        `;
+        if (!document.getElementById('hide-native-controls')) {
+            (document.head || document.documentElement).appendChild(style);
+        }
+        // Re-aplicar periodicamente pois o Boosteroid recria elementos
+        setInterval(() => {
+            if (!document.getElementById('hide-native-controls')) {
+                (document.head || document.documentElement).appendChild(style);
+            }
+        }, 2000);
+    };
+
     const startBoosteroidAntiAFK = () => {
         if (!PLATFORM.isBoosteroid) return;
         setInterval(() => {
@@ -62,6 +90,7 @@ const SVG_ICONS = {"A": "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAyIiBoZWlna
         if (!config.buttonOverrides) config.buttonOverrides = {};
         setup();
         startBoosteroidAntiAFK();
+        hideNativeBoosteroidControls();
     });
 
     const setup = () => {
