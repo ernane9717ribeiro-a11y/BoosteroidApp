@@ -64,7 +64,7 @@ const main = () => {
     const setup = () => {
         const root = document.createElement("div");
         root.id = "ctrl-overlay-root";
-        root.style.cssText = `position:fixed;inset:0;pointer-events:none;z-index:${Z_TOP};touch-action:none;user-select:none;-webkit-user-select:none;`;
+        root.style.cssText = `position:fixed;inset:0;pointer-events:none;z-index:${Z_TOP};touch-action:none;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent;`;
 
         const touchLayer = document.createElement("div");
         touchLayer.style.cssText = `position:absolute;inset:0;pointer-events:none;display:none;`;
@@ -143,11 +143,12 @@ const main = () => {
         const applyButtonStyle = (button, index) => {
             const el = button.buttonElem;
             const ov = getOv(index);
-            el.style.cssText = `position:fixed;z-index:${Z_TOP};pointer-events:auto;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-user-drag:none;-webkit-touch-callout:none;background:none;border:none;box-shadow:none;padding:0;margin:0;`;
+            el.style.cssText = `position:fixed;z-index:${Z_TOP};pointer-events:auto;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-user-drag:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent;tap-highlight-color:transparent;background:none;border:none;box-shadow:none;padding:0;margin:0;cursor:pointer;`;
             el.draggable = false;
             const scale = ov.scale !== undefined ? ov.scale : button.scale;
             const diameter = config.buttonDiameter;
             el.style.width = (diameter * scale) + "px";
+            el.style.height = "auto";
             const opacity = ov.hidden ? 0 : (ov.opacity !== undefined ? ov.opacity : config.opacity);
             el.style.opacity = ((opacity / 255) * 100) + "%";
             el.style.filter = (config.enableColors && !button.pressed) ? "drop-shadow(0 0 0 " + button.color + ")" : "";
@@ -165,6 +166,8 @@ const main = () => {
         emulatedGamepad.buttons.forEach((button, i) => {
             const buttonElem = document.createElement("img");
             buttonElem.src = `${config.url}/${button.img}.svg`;
+            buttonElem.draggable = false;
+            buttonElem.setAttribute("draggable", "false");
             button.pressed = false; button.touched = false; button.value = 0;
             button.buttonElem = buttonElem;
             applyButtonStyle(button, i);
@@ -354,7 +357,9 @@ const main = () => {
             return false;
         };
 
-        const refreshButtonSizes = () => { emulatedGamepad.buttons.forEach((b,i) => applyButtonStyle(b,i)); };
+        const refreshButtonSizes = () => {
+            emulatedGamepad.buttons.forEach((b, i) => applyButtonStyle(b, i));
+        };
         const saveButtonOverrides = () => { pushConfig({ buttonOverrides: config.buttonOverrides }); };
 
         // ---------- Painel de edição individual ----------
@@ -679,19 +684,63 @@ const main = () => {
         // ---------- Listeners dos botões ----------
         emulatedGamepad.buttons.forEach((button, i) => {
             const el = button.buttonElem;
+            let activeTouchId = null;
             let touchT = 0, touchMoved = false;
-            el.addEventListener("touchstart",(e)=>{ e.preventDefault(); touchT=Date.now(); touchMoved=false; if(layoutMode) layoutButton(e,0,i); else pressButton(i,true); },{passive:false});
-            el.addEventListener("touchmove",(e)=>{ e.preventDefault(); touchMoved=true; if(layoutMode) layoutButton(e,1,i); },{passive:false});
-            el.addEventListener("touchend",(e)=>{ e.preventDefault();
-                if(layoutMode){
-                    layoutButton(e,2,i);
-                    if(!touchMoved && Date.now()-touchT < 280){ selectedButtonIndex=(selectedButtonIndex===i)?-1:i; updateBtnEditPanel(); refreshButtonSizes(); }
-                } else pressButton(i,false);
-            },{passive:false});
-            el.addEventListener("touchcancel",(e)=>{ e.preventDefault(); if(!layoutMode) pressButton(i,false); },{passive:false});
-            el.addEventListener("mousedown",()=>{ if(!layoutMode) pressButton(i,true); });
-            el.addEventListener("mouseup",  ()=>{ if(!layoutMode) pressButton(i,false); });
-            el.addEventListener("mouseleave",()=>{ if(!layoutMode) pressButton(i,false); });
+
+            el.addEventListener("touchstart", (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (layoutMode) {
+                    layoutButton(e, 0, i);
+                    touchT = Date.now(); touchMoved = false;
+                    return;
+                }
+                // Aceitar somente o primeiro toque no botão
+                if (activeTouchId === null) {
+                    activeTouchId = e.changedTouches[0].identifier;
+                    pressButton(i, true);
+                }
+            }, { passive: false });
+
+            el.addEventListener("touchmove", (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (layoutMode) { touchMoved = true; layoutButton(e, 1, i); }
+            }, { passive: false });
+
+            el.addEventListener("touchend", (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (layoutMode) {
+                    layoutButton(e, 2, i);
+                    if (!touchMoved && Date.now() - touchT < 280) {
+                        selectedButtonIndex = (selectedButtonIndex === i) ? -1 : i;
+                        updateBtnEditPanel(); refreshButtonSizes();
+                    }
+                    return;
+                }
+                for (let t = 0; t < e.changedTouches.length; t++) {
+                    if (e.changedTouches[t].identifier === activeTouchId) {
+                        activeTouchId = null;
+                        pressButton(i, false);
+                        break;
+                    }
+                }
+            }, { passive: false });
+
+            el.addEventListener("touchcancel", (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (!layoutMode) {
+                    activeTouchId = null;
+                    pressButton(i, false);
+                }
+            }, { passive: false });
+
+            // Mouse (desktop/teste)
+            el.addEventListener("mousedown", (e) => { if (!layoutMode) { e.preventDefault(); pressButton(i, true); } });
+            el.addEventListener("mouseup",   (e) => { if (!layoutMode) { e.preventDefault(); pressButton(i, false); } });
+            el.addEventListener("mouseleave",(e) => { if (!layoutMode) pressButton(i, false); });
         });
 
         const attachUI = () => {
